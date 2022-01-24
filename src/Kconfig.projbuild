@@ -1,0 +1,9 @@
+menu "Unimot Configuration"
+
+    config UNIMOT_DEVICE_NAME
+        string "device name"
+        default "UNIMOT_000000"
+        help
+            Device name defined by program Unimot-add-esp
+            Format = UNIMOT_MAC[3>5]    uses 3 last mac pairs
+endmenu
