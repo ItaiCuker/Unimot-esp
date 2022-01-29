@@ -11,6 +11,10 @@
         "stdio.h": "c",
         "gpio.h": "c",
         "err.h": "c",
-        "scheme_ble.h": "c"
+        "scheme_ble.h": "c",
+        "esp_wifi.h": "c",
+        "exception": "c",
+        "iotc.h": "c",
+        "iotc_jwt.h": "c"
     }
 }
