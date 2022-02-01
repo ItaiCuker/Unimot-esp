@@ -1,12 +1,4 @@
 menu "Unimot Configuration"
-
-    config UNIMOT_DEVICE_NAME
-        string "device name"
-        default "UNIMOT_000000"
-        help
-            Device name defined by program Unimot-add-esp
-            Format = UNIMOT_XXXXXX    last 3 mac pairs
-
     config UNIMOT_POP
         string "proof of possesion"
         default "unimot"
