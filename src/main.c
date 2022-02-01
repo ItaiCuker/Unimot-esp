@@ -56,9 +56,6 @@ static bool isProvisioned = false;  //is device provisioned (does it have AP cre
 extern const uint8_t ec_pv_key_start[] asm("_binary_private_key_pem_start");
 extern const uint8_t ec_pv_key_end[] asm("_binary_private_key_pem_end");
 
-//for silencing compiler warnings
-#define IOTC_UNUSED(x) void(x)
-
 //device path in Google cloud IoT
 #define DEVICE_PATH "projects/%s/locations/%s/registries/%s/devices/%s"
 //command subscription path
@@ -221,6 +218,39 @@ void start_wifi_sta()
     ESP_ERROR_CHECK(esp_wifi_start());
 }
 
+void iotc_mqttlogic_subscribe_callback(iotc_context_handle_t in_context_handle, iotc_sub_call_type_t call_type,
+const iotc_sub_call_params_t *const params, 
+iotc_state_t state,
+void *user_data)
+{
+    (void)(in_context_handle);
+    (void)(call_type);
+    (void)(state);
+    (void)(user_data);
+    if (params != NULL && params->message.topic != NULL) {
+        ESP_LOGI(TAG, "Subscription Topic: %s", params->message.topic);
+        char *sub_message = (char *)malloc(params->message.temporary_payload_data_length + 1);
+        if (sub_message == NULL) {
+            ESP_LOGE(TAG, "Failed to allocate memory");
+            return;
+        }
+        memcpy(sub_message, params->message.temporary_payload_data, params->message.temporary_payload_data_length);
+        sub_message[params->message.temporary_payload_data_length] = '\0';
+        ESP_LOGI(TAG, "Message Payload: %s\n %s == %s", sub_message, subscribe_topic_command, params->message.topic);
+        if (strcmp("/devices/test_device/commands/", params->message.topic)) {
+            int value;
+            sscanf(sub_message, "%d", &value);
+            ESP_LOGI(TAG, "value: %d", value);
+            if (value == 1) {
+                gpio_set_level(STATUS_GPIO, true);
+            } else if (value == 0) {
+                gpio_set_level(STATUS_GPIO, false);
+            }
+        }
+        free(sub_message);
+    }
+}
+
 /**
  * @brief generates a JWT (jason web token) to connect to the cloud
  * 
@@ -328,10 +358,10 @@ void on_connection_state_changed(iotc_context_handle_t in_context_handle, void *
            in this example file and invokes the IoTC API to publish a
            message. */
 
-        // asprintf(&subscribe_topic_command, SUBSCRIBE_TOPIC_COMMAND, CONFIG_GIOT_DEVICE_ID);
-        // ESP_LOGI(TAG, "subscribing to topic: \"%s\"", subscribe_topic_command);
-        // iotc_subscribe(in_context_handle, subscribe_topic_command, IOTC_MQTT_QOS_AT_LEAST_ONCE,
-        //                &iotc_mqttlogic_subscribe_callback, /*user_data=*/NULL);
+        asprintf(&subscribe_topic_command, SUBSCRIBE_TOPIC_COMMAND, CONFIG_GIOT_DEVICE_ID);
+        ESP_LOGI(TAG, "subscribing to topic: \"%s\"", subscribe_topic_command);
+        iotc_subscribe(in_context_handle, subscribe_topic_command, IOTC_MQTT_QOS_AT_LEAST_ONCE,
+                       &iotc_mqttlogic_subscribe_callback, /*user_data=*/NULL);
         break;
 
         /* IOTC_CONNECTION_STATE_OPEN_FAILED is set when there was a problem
@@ -458,11 +488,15 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
         {
             wifi_prov_mgr_deinit();
             esp_wifi_connect();
+            //stopping startup LED sequence
+        if( xHandleTaskStartupLED != NULL)
+            vTaskDelete(xHandleTaskStartupLED);
         }
     }
     //if event is device disconnected from AP but already provisioned
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED && isProvisioned) 
     {
+        xTaskCreate(&vTaskStartupLED, "startupLED", 512, NULL, 1, &xHandleTaskStartupLED);
         if (retries < 5) //trying to reconnect 5 times
          {
             esp_wifi_connect();
