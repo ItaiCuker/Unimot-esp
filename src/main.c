@@ -36,14 +36,13 @@
 //event handlers declaration
 void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 void on_connection_state_changed(iotc_context_handle_t in_context_handle, void *data, iotc_state_t state);
-void TaskStartupLED(void *pvParameters);
 static void TaskButtonScan(void* arg);
 
 //Log tag
 static const char *TAG = "Unimot";
 
 //Button
-ESP_EVENT_DECLARE_BASE(BUTTON_EVENT);   //button event base
+ESP_EVENT_DEFINE_BASE(BUTTON_EVENT);    //button event base
 
 /* button event declarations */
 typedef enum
@@ -52,14 +51,36 @@ typedef enum
     BUTTON_EVENT_LONG
 }button_event_t;
 
-#define BUTTON_GPIO 33
+#define BUTTON_GPIO 12
 static TaskHandle_t HandleTaskButtonScan = NULL;
 #define LONG_PRESS_IN_SECONDS 3
 
 //Status LED
-#define STATUS_GPIO 02  //GPIO number
-static TaskHandle_t HandleTaskStartupLED = NULL;   //handle for task
-#define START_LED_SEQUENCE xTaskCreate(&TaskStartupLED, "startupLED", 512, NULL, 1, &HandleTaskStartupLED);
+#define STATUS_GPIO 02                              //GPIO number
+
+/**
+ * @brief enum for app status
+ * 
+ */
+typedef enum
+{
+    STATUS_OK,
+    STATUS_WIFI,
+    STATUS_PROV
+}status_led;
+void TaskStartupLED(void *status);            //task declaration
+static TaskHandle_t HandleTaskStartupLED = NULL;    //handle for task
+static status_led status = STATUS_OK;                           //variable for task
+const TickType_t delay = 150 / portTICK_PERIOD_MS;  //delay for led blink
+
+//macro for blink
+#define BLINK {\
+    gpio_set_level(STATUS_GPIO, 1);\
+    vTaskDelay(delay);\
+    gpio_set_level(STATUS_GPIO, 0);\
+    vTaskDelay(delay);\
+}
+
 
 /* Wi-Fi events */
 const int WIFI_CONNECTED_BIT = BIT0;
@@ -68,6 +89,8 @@ static EventGroupHandle_t wifi_event_group;
 static int retries = 0;  //how many times to retry to connect to AP
 
 static bool isProvisioned = false;  //is device provisioned (does it have AP credentials stored in NVS?).
+static bool isConnectedWiFi = false;         //is device currently connected to AP
+static bool isConnectedIotc = false;          //is device connected to 
 
 //private key location in program
 extern const uint8_t ec_pv_key_start[] asm("_binary_private_key_pem_start");
@@ -86,15 +109,12 @@ iotc_context_handle_t iotc_context = IOTC_INVALID_CONTEXT_HANDLE;
 
 void init_button()
 {
-    /* Configure input and pull up to read button values */
-    gpio_config_t io_conf = {
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-    };
-    io_conf.pin_bit_mask = ((uint64_t)1 << BUTTON_GPIO);
-    /* Configure the GPIO */
-    gpio_config(&io_conf);
+    /* Configure input and pull up to read button value */
+    gpio_set_direction(BUTTON_GPIO, GPIO_MODE_INPUT);
+    gpio_set_pull_mode(BUTTON_GPIO, GPIO_PULLUP_ONLY);
 
+    //register button events to event handler and start task
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(BUTTON_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, NULL));
     if (HandleTaskButtonScan == NULL)
         xTaskCreate(&TaskButtonScan, "button scan", 2048, NULL, 1, &HandleTaskButtonScan);
 }
@@ -109,50 +129,49 @@ static void TaskButtonScan(void* arg)
 	ESP_LOGI(TAG, "Waiting For Press.");
 	
 	for (;;) 
-	{
-		ESP_LOGI(TAG, "button =%d",gpio_get_level(BUTTON_GPIO));
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-        
-        // // Wait here to detect press
-		// while( gpio_get_level(BUTTON_GPIO) )
-		// {
-		// 	vTaskDelay(125 / portTICK_PERIOD_MS);
-		// }
+	{        
+        // Wait here to detect press
+		while( gpio_get_level(BUTTON_GPIO) )
+		{
+			vTaskDelay(125 / portTICK_PERIOD_MS);
+		}
 		
-		// // Debounce
-		// vTaskDelay(50 / portTICK_PERIOD_MS);
+		// Debounce
+		vTaskDelay(50 / portTICK_PERIOD_MS);
 
-		// // Re-Read Button State After Debounce
-		// if (!gpio_get_level(BUTTON_GPIO)) 
-		// {
-		// 	ESP_LOGI(TAG, "BTN Pressed Down.");
+		// Re-Read Button State After Debounce
+		if (!gpio_get_level(BUTTON_GPIO)) 
+		{
+			ESP_LOGI(TAG, "BTN Pressed Down.");
 			
-		// 	ticks = 0;
+			ticks = 0;
 		
-		// 	// Loop here while pressed until user lets go, or longer that set time
-		// 	while ((!gpio_get_level(BUTTON_GPIO)) && (++ticks < LONG_PRESS_IN_SECONDS * 100))
-		// 	{
-		// 		vTaskDelay(10 / portTICK_PERIOD_MS);
-		// 	} 
+			// Loop here while pressed until user lets go, or longer that set time
+			while ((!gpio_get_level(BUTTON_GPIO)) && (++ticks < LONG_PRESS_IN_SECONDS * 100))
+			{
+				vTaskDelay(10 / portTICK_PERIOD_MS);
+			} 
 
-		// 	// Did fall here because user held a long press or let go for a short press
-		// 	if (ticks >= LONG_PRESS_IN_SECONDS * 100)
-		// 	{
-		// 		ESP_LOGI(TAG, "Long Press");
-		// 	}
-		// 	else
-		// 	{
-		// 		ESP_LOGI(TAG, "Short Press");
-		// 	}
+			// Did fall here because user held a long press or let go for a short press
+			if (ticks >= LONG_PRESS_IN_SECONDS * 100)
+			{
+				ESP_LOGI(TAG, "Long Press");
+                ESP_ERROR_CHECK(esp_event_post(BUTTON_EVENT, BUTTON_EVENT_LONG, NULL, 0, portMAX_DELAY));
+			}
+			else
+			{
+				ESP_LOGI(TAG, "Short Press");
+                ESP_ERROR_CHECK(esp_event_post(BUTTON_EVENT, BUTTON_EVENT_SHORT, NULL, 0, portMAX_DELAY));
+			}
 
-		// 	// Wait here if they are still holding it
-		// 	while(!gpio_get_level(BUTTON_GPIO))
-		// 	{
-		// 		vTaskDelay(100 / portTICK_PERIOD_MS);
-		// 	}
+			// Wait here if they are still holding it
+			while(!gpio_get_level(BUTTON_GPIO))
+			{
+				vTaskDelay(100 / portTICK_PERIOD_MS);
+			}
 			
-		// 	ESP_LOGI(TAG, "BTN Released.");
-		// }
+			ESP_LOGI(TAG, "BTN Released.");
+		}
 	}
 }
 
@@ -193,19 +212,27 @@ static void obtain_time(void)
  * 
  * @param pvParameters void
  */
-void TaskStartupLED(void *pvParameters)
+void TaskStartupLED(void *arg)
 {
-    const TickType_t delay = 150 / portTICK_PERIOD_MS;
-    while(true)
+    for(;;)
     {
-        for (size_t i = 0; i < 3; i++)
+        status_led *mStatus = (status_led*)arg;
+        //led sequence when provisioning
+        while(*mStatus == STATUS_PROV)
         {
-            gpio_set_level(STATUS_GPIO, 1);
-            vTaskDelay(delay);
-            gpio_set_level(STATUS_GPIO, 0);
-            vTaskDelay(delay);
+            for (size_t i = 0; i < 3; i++)
+                BLINK;
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
         }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+        //led sequence when provisioned but wifi disconnected
+        while (*mStatus == STATUS_WIFI)
+            BLINK;
+
+        while (*mStatus == STATUS_OK)
+        {
+            vTaskDelay(10 / portTICK_PERIOD_MS);
+        }
     }
 }
 
@@ -222,9 +249,9 @@ static void init_status_led()
     };
     io_conf.pin_bit_mask = ((uint64_t)1 << STATUS_GPIO);
     /* Configure the GPIO */
-    gpio_config(&io_conf);
-    gpio_set_level(STATUS_GPIO, false);
-    START_LED_SEQUENCE
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
+    ESP_ERROR_CHECK(gpio_set_level(STATUS_GPIO, false));
+    xTaskCreate(&TaskStartupLED, "startupLED", 512, &status, 1, &HandleTaskStartupLED);
 }
 
 /**
@@ -328,9 +355,9 @@ void iotc_mqttlogic_subscribe_callback(iotc_context_handle_t in_context_handle, 
             sscanf(sub_message, "%d", &value);
             ESP_LOGI(TAG, "value: %d", value);
             if (value == 1) {
-                gpio_set_level(STATUS_GPIO, true);
+                ESP_ERROR_CHECK(gpio_set_level(STATUS_GPIO, true));
             } else if (value == 0) {
-                gpio_set_level(STATUS_GPIO, false);
+                ESP_ERROR_CHECK(gpio_set_level(STATUS_GPIO, false));
             }
         }
         free(sub_message);
@@ -549,7 +576,7 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
                 break;
             }
             case WIFI_PROV_CRED_SUCCESS:
-                ESP_LOGI(TAG, "Provisioning successful");
+                ESP_LOGI(TAG, "Provisioning successful %d", isConnectedWiFi);
                 retries = 0;
                 break;
             case WIFI_PROV_END:
@@ -563,12 +590,12 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
     //if event is got IP (device is connected to AP)
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) 
     {
+        isConnectedWiFi = true;
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "Connected with IP Address:" IPSTR, IP2STR(&event->ip_info.ip));
         /* Signal main application to continue execution */
         //stopping startup LED sequence
-        if( HandleTaskStartupLED != NULL)
-            vTaskDelete(HandleTaskStartupLED);
+        status = STATUS_OK;
         xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
     } 
     //if event is wifi station started
@@ -584,11 +611,9 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
     //if event is device disconnected from AP but already provisioned
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) 
     {
+        isConnectedWiFi = false;
         //showing disconnected LED sequence
-        if (HandleTaskStartupLED == NULL)
-        {
-            START_LED_SEQUENCE
-        }
+        status = STATUS_WIFI;
         
         if (isProvisioned)
         {
@@ -608,6 +633,10 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
             }
         }
     }
+    else if (event_base == BUTTON_EVENT && event_id == BUTTON_EVENT_LONG)
+    {
+
+    }
 }
 
 void app_main() 
@@ -618,44 +647,46 @@ void app_main()
 
     //blinking led until startup is finished (ESP connected to AP)
     init_status_led();      //init status LED
-
     init_button();      //init button event task
-    // init_nvs();         //init storage of program
-    // init_wifi();        //init wifi station
-    // init_prov();        //init provisioning API
+    init_nvs();         //init storage of program
+    init_wifi();        //init wifi station
+    init_prov();        //init provisioning API
 
-    // /*checking if device has been provisioned */
-    // ESP_ERROR_CHECK(wifi_prov_mgr_is_provisioned(&isProvisioned));
-    // ESP_LOGI(TAG, "provisoned? %s", isProvisioned ? "true" : "false");
-    // if (isProvisioned)
-    //     start_wifi_sta();
-    // else
-    //     start_prov();
+    /*checking if device has been provisioned */
+    ESP_ERROR_CHECK(wifi_prov_mgr_is_provisioned(&isProvisioned));
+    ESP_LOGI(TAG, "provisoned? %s", isProvisioned ? "true" : "false");
+    if (isProvisioned)
+    {   
+        status = STATUS_WIFI;     
+        start_wifi_sta();
+    }    
+    else
+    {
+        status = STATUS_PROV;
+        start_prov();
+    }
 
-    // //waiting until connected
-    // xEventGroupWaitBits(wifi_event_group,
-    //         WIFI_CONNECTED_BIT,
-    //         pdFALSE,
-    //         pdFALSE,
-    //         portMAX_DELAY);
+    //waiting until connected
+    xEventGroupWaitBits(wifi_event_group,
+            WIFI_CONNECTED_BIT,
+            pdFALSE,
+            pdFALSE,
+            portMAX_DELAY);
 
-    // isProvisioned = true;   //we are connected to WiFi now
+    isProvisioned = true;   //we are connected to WiFi now
 
-    // //stopping startup LED sequence if hasn't already
-    // if( HandleTaskStartupLED != NULL)
-    // {
-    //     vTaskDelete(HandleTaskStartupLED);
-    // }
-    // gpio_set_level(STATUS_GPIO, 0);
+    //stopping startup LED sequence if hasn't already
+    status = STATUS_OK;
+    gpio_set_level(STATUS_GPIO, 0);
 
-    // //logging time since program start
-    // int64_t time_since_boot = esp_timer_get_time();
-    // ESP_LOGI(TAG, "connected to Wifi in: %lld microseconds", time_since_boot);
+    //logging time since program start
+    int64_t time_since_boot = esp_timer_get_time();
+    ESP_LOGI(TAG, "connected to Wifi in: %lld microseconds", time_since_boot);
     
-    // ESP_LOGI(TAG, "starting connection to cloud");
+    ESP_LOGI(TAG, "starting connection to cloud");
     
-    // obtain_time();  //waiting to get accurate time
+    obtain_time();  //waiting to get accurate time
 
-    // //creating mqtt task with privlige 1
-    // xTaskCreate(&mqtt_task, "mqtt_task", 8192, NULL, 1, NULL);
+    //creating mqtt task with privlige 1
+    xTaskCreate(&mqtt_task, "mqtt_task", 8192, NULL, 1, NULL);
 }
