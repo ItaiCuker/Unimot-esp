@@ -15,6 +15,8 @@
         "esp_wifi.h": "c",
         "exception": "c",
         "iotc.h": "c",
-        "iotc_jwt.h": "c"
-    }
+        "iotc_jwt.h": "c",
+        "esp_event.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "Enabled"
 }

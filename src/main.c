@@ -36,13 +36,28 @@
 //event handlers declaration
 void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 void on_connection_state_changed(iotc_context_handle_t in_context_handle, void *data, iotc_state_t state);
+static void TaskButtonScan(void* arg);
 
 //Log tag
 static const char *TAG = "Unimot";
 
+//Button
+ESP_EVENT_DECLARE_BASE(BUTTON_EVENT);   //button event base
+
+/* button event declarations */
+typedef enum
+{
+    BUTTON_EVENT_SHORT,
+    BUTTON_EVENT_LONG
+}button_event_t;
+
+#define BUTTON_GPIO 05
+static TaskHandle_t HandleTaskButtonScan = NULL;
+#define LONG_PRESS_IN_SECONDS 3
+
 //Status LED
 #define STATUS_GPIO 02  //GPIO number
-static TaskHandle_t xHandleTaskStartupLED = NULL;   //handle for task
+static TaskHandle_t HandleTaskStartupLED = NULL;   //handle for task
 
 /* Wi-Fi events */
 const int WIFI_CONNECTED_BIT = BIT0;
@@ -67,6 +82,76 @@ char *subscribe_topic_command, *subscribe_topic_config;
 //connection context for iotc
 iotc_context_handle_t iotc_context = IOTC_INVALID_CONTEXT_HANDLE;
 
+void init_button()
+{
+    /* Configure input and pull up to read button values */
+    gpio_config_t io_conf = {
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = 1,
+    };
+    io_conf.pin_bit_mask = ((uint64_t)1 << BUTTON_GPIO);
+    /* Configure the GPIO */
+    gpio_config(&io_conf);
+
+    if (HandleTaskButtonScan == NULL)
+        xTaskCreate(&TaskButtonScan, "startupLED", 512, NULL, 1, &HandleTaskButtonScan);    
+}
+
+/**
+ * @brief task to handle button scanning
+ */
+static void TaskButtonScan(void* arg)
+{
+	uint16_t ticks = 0;
+
+	ESP_LOGI(TAG, "Waiting For Press.");
+	
+	for (;;) 
+	{
+
+		// Wait here to detect press
+		while( gpio_get_level(BUTTON_GPIO) )
+		{
+			vTaskDelay(125 / portTICK_PERIOD_MS);
+		}
+		
+		// Debounce
+		vTaskDelay(50 / portTICK_PERIOD_MS);
+
+		// Re-Read Button State After Debounce
+		if (!gpio_get_level(BUTTON_GPIO)) 
+		{
+			ESP_LOGI(TAG, "BTN Pressed Down.");
+			
+			ticks = 0;
+		
+			// Loop here while pressed until user lets go, or longer that set time
+			while ((!gpio_get_level(BUTTON_GPIO)) && (++ticks < LONG_PRESS_IN_SECONDS * 100))
+			{
+				vTaskDelay(10 / portTICK_PERIOD_MS);
+			} 
+
+			// Did fall here because user held a long press or let go for a short press
+			if (ticks >= LONG_PRESS_IN_SECONDS * 100)
+			{
+				ESP_LOGI(TAG, "Long Press");
+			}
+			else
+			{
+				ESP_LOGI(TAG, "Short Press");
+			}
+
+			// Wait here if they are still holding it
+			while(!gpio_get_level(BUTTON_GPIO))
+			{
+				vTaskDelay(100 / portTICK_PERIOD_MS);
+			}
+			
+			ESP_LOGI(TAG, "BTN Released.");
+		}
+
+	}
+}
 
 /**
  * @brief initalizing SNTP - Simple Network Time Protocol to synchronize ESP32 time with google's.
@@ -122,7 +207,7 @@ static void init_status_led()
  * 
  * @param pvParameters void
  */
-void vTaskStartupLED(void *pvParameters)
+void TaskStartupLED(void *pvParameters)
 {
     const TickType_t delay = 150 / portTICK_PERIOD_MS;
     while(true)
@@ -190,7 +275,7 @@ void start_prov()
  * @brief init wifi station
  * 
  */
-void init_wifi_sta()
+void init_wifi()
 {
     /* Initialize TCP/IP */
     ESP_ERROR_CHECK(esp_netif_init());
@@ -258,7 +343,7 @@ void *user_data)
  * @param dst_jwt_buf_len length of destination
  * @return iotc_state_t state of JWT generation
  */
-iotc_state_t generate_jwt(char* dst_jwt_buf, size_t dst_jwt_buf_len) {
+iotc_state_t generate_jwt(char* dst_jwt_buf, size_t dst_jwt_buf_len, uint32_t exp) {
     /* Format the key type descriptors so the client understands
      which type of key is being represented. In this case, a PEM encoded
      byte array of a ES256 key. */
@@ -274,7 +359,7 @@ iotc_state_t generate_jwt(char* dst_jwt_buf, size_t dst_jwt_buf_len) {
     size_t bytes_written = 0;
     iotc_state_t state = iotc_create_iotcore_jwt(
             CONFIG_GIOT_PROJECT_ID, //my GCP project
-            /*jwt_expiration_period_sec=*/3600,
+            /*jwt_expiration_period_sec=*/exp,
             &iotc_connect_private_key_data,
             dst_jwt_buf,dst_jwt_buf_len, &bytes_written);
     return state;
@@ -307,8 +392,11 @@ static void mqtt_task(void *pvParameters)
     /* Generate the client authentication JWT, which will serve as the MQTT
      * password. */
     char jwt[IOTC_JWT_SIZE] = {0};
-    iotc_state_t state = generate_jwt(jwt, IOTC_JWT_SIZE);
-    
+    iotc_state_t state = generate_jwt(jwt, IOTC_JWT_SIZE, 1);
+
+    ESP_LOGI(TAG, "wait 30 sec");
+    vTaskDelay(30000 / portTICK_PERIOD_MS);
+
     ESP_LOGI(TAG, "jwt =\n%s\n", jwt);
 
     if (IOTC_STATE_OK != state) {
@@ -411,7 +499,7 @@ void on_connection_state_changed(iotc_context_handle_t in_context_handle, void *
             to this callback in the conn_data structure. */
 
             char jwt[IOTC_JWT_SIZE] = {0};
-            state = generate_jwt(jwt, IOTC_JWT_SIZE);
+            state = generate_jwt(jwt, IOTC_JWT_SIZE, 30);
 
             iotc_connect(
                 in_context_handle, conn_data->username, jwt, conn_data->client_id,
@@ -477,34 +565,36 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "Connected with IP Address:" IPSTR, IP2STR(&event->ip_info.ip));
         /* Signal main application to continue execution */
-        retries = 0;
+        //stopping startup LED sequence
+        if( HandleTaskStartupLED != NULL)
+            vTaskDelete(HandleTaskStartupLED);
         xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
     } 
-    //if event is wifi station started than connect to wifi AP
+    //if event is wifi station started
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
     {
         ESP_LOGI(TAG, "WiFi Station started.");
-        if (isProvisioned)
+        if (isProvisioned)  //on start-up if device is already provisioned
         {
             wifi_prov_mgr_deinit();
             esp_wifi_connect();
-            //stopping startup LED sequence
-        if( xHandleTaskStartupLED != NULL)
-            vTaskDelete(xHandleTaskStartupLED);
         }
     }
     //if event is device disconnected from AP but already provisioned
-    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED && isProvisioned) 
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) 
     {
-        xTaskCreate(&vTaskStartupLED, "startupLED", 512, NULL, 1, &xHandleTaskStartupLED);
-        if (retries < 5) //trying to reconnect 5 times
-         {
-            esp_wifi_connect();
-            retries++;
-            ESP_LOGI(TAG, "retry to connect to the AP");
-        }
-        else //couldn't reconnect. TODO: maybe restart provisioning.
+        //showing disconnected LED sequence
+        if (HandleTaskStartupLED == NULL)
         {
+            xTaskCreate(&TaskStartupLED, "startupLED", 512, NULL, 1, &HandleTaskStartupLED);
+        }
+        
+        if (isProvisioned)
+        {
+            esp_wifi_connect();
+            ESP_LOGI(TAG, "retry to connect to the AP");
+
+            //logging reason
             wifi_event_sta_disconnected_t* disconnected = (wifi_event_sta_disconnected_t*) event_data;
             switch(disconnected->reason)
             {
@@ -513,7 +603,7 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
                     break;
                 case WIFI_REASON_NO_AP_FOUND:
                     ESP_LOGE(TAG, "AP not found");
-                    break;
+                    break;   
             }
         }
     }
@@ -524,13 +614,14 @@ void app_main()
     ESP_LOGI(TAG, "Unimot-esp start");
     init_status_led();      //init status LED
     //blinking led until startup is finished (ESP connected to AP)
-    xTaskCreate(&vTaskStartupLED, "startupLED", 512, NULL, 1, &xHandleTaskStartupLED);
-
+    xTaskCreate(&TaskStartupLED, "startupLED", 1024, NULL, 1, &HandleTaskStartupLED);
+    ESP_LOGI(TAG, "here here");
     /* Initialize the default event loop */
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
+    init_button();      //init button event task
     init_nvs();         //init storage of program
-    init_wifi_sta();    //init wifi station
+    init_wifi();        //init wifi station
     init_prov();        //init provisioning API
 
     /*checking if device has been provisioned */
@@ -551,9 +642,9 @@ void app_main()
     isProvisioned = true;   //we are connected to WiFi now
 
     //stopping startup LED sequence
-    if( xHandleTaskStartupLED != NULL)
+    if( HandleTaskStartupLED != NULL)
     {
-        vTaskDelete(xHandleTaskStartupLED);
+        vTaskDelete(HandleTaskStartupLED);
     }
     gpio_set_level(STATUS_GPIO, 0);
 
