@@ -11,13 +11,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/event_groups.h"
-
-#include "esp_log.h"
+#include <Arduino.h>
 #include "esp_wifi.h"
-#include "esp_event.h"
 #include "esp_timer.h"
 
 #include "nvs_flash.h"
@@ -30,56 +25,11 @@
 #include "lwip/err.h"
 #include "lwip/sys.h"
 
-#include <iotc.h>
-#include <iotc_jwt.h>
+#include "defines.h"
+#include "btn.h"
+#include "status_led.h"
 
-//event handlers declaration
-void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
-void on_connection_state_changed(iotc_context_handle_t in_context_handle, void *data, iotc_state_t state);
-static void TaskButtonScan(void* arg);
-
-//Log tag
-static const char *TAG = "Unimot";
-
-//Button
-ESP_EVENT_DEFINE_BASE(BUTTON_EVENT);    //button event base
-
-/* button event declarations */
-typedef enum
-{
-    BUTTON_EVENT_SHORT,
-    BUTTON_EVENT_LONG
-}button_event_t;
-
-#define BUTTON_GPIO 12
-static TaskHandle_t HandleTaskButtonScan = NULL;
-#define LONG_PRESS_IN_SECONDS 3
-
-//Status LED
-#define STATUS_GPIO 02                              //GPIO number
-
-/**
- * @brief enum for app status
- * 
- */
-typedef enum
-{
-    STATUS_OK,
-    STATUS_WIFI,
-    STATUS_PROV
-}status_led;
-void TaskStartupLED(void *status);            //task declaration
-static TaskHandle_t HandleTaskStartupLED = NULL;    //handle for task
-static status_led status = STATUS_OK;                           //variable for task
-const TickType_t delay = 150 / portTICK_PERIOD_MS;  //delay for led blink
-
-//macro for blink
-#define BLINK {\
-    gpio_set_level(STATUS_GPIO, 1);\
-    vTaskDelay(delay);\
-    gpio_set_level(STATUS_GPIO, 0);\
-    vTaskDelay(delay);\
-}
+// #include <IRac.h>
 
 
 /* Wi-Fi events */
@@ -92,10 +42,6 @@ static bool isProvisioned = false;  //is device provisioned (does it have AP cre
 static bool isConnectedWiFi = false;         //is device currently connected to AP
 static bool isConnectedIotc = false;          //is device connected to 
 
-//private key location in program
-extern const uint8_t ec_pv_key_start[] asm("_binary_private_key_pem_start");
-extern const uint8_t ec_pv_key_end[] asm("_binary_private_key_pem_end");
-
 //device path in Google cloud IoT
 #define DEVICE_PATH "projects/%s/locations/%s/registries/%s/devices/%s"
 //command subscription path
@@ -107,73 +53,8 @@ char *subscribe_topic_command, *subscribe_topic_config;
 //connection context for iotc
 iotc_context_handle_t iotc_context = IOTC_INVALID_CONTEXT_HANDLE;
 
-void init_button()
-{
-    /* Configure input and pull up to read button value */
-    gpio_set_direction(BUTTON_GPIO, GPIO_MODE_INPUT);
-    gpio_set_pull_mode(BUTTON_GPIO, GPIO_PULLUP_ONLY);
+// IRac ac(0, false, true);
 
-    //register button events to event handler and start task
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(BUTTON_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, NULL));
-    if (HandleTaskButtonScan == NULL)
-        xTaskCreate(&TaskButtonScan, "button scan", 2048, NULL, 1, &HandleTaskButtonScan);
-}
-
-/**
- * @brief task to handle button scanning
- */
-static void TaskButtonScan(void* arg)
-{
-	uint16_t ticks = 0;
-
-	ESP_LOGI(TAG, "Waiting For Press.");
-	
-	for (;;) 
-	{        
-        // Wait here to detect press
-		while( gpio_get_level(BUTTON_GPIO) )
-		{
-			vTaskDelay(125 / portTICK_PERIOD_MS);
-		}
-		
-		// Debounce
-		vTaskDelay(50 / portTICK_PERIOD_MS);
-
-		// Re-Read Button State After Debounce
-		if (!gpio_get_level(BUTTON_GPIO)) 
-		{
-			ESP_LOGI(TAG, "BTN Pressed Down.");
-			
-			ticks = 0;
-		
-			// Loop here while pressed until user lets go, or longer that set time
-			while ((!gpio_get_level(BUTTON_GPIO)) && (++ticks < LONG_PRESS_IN_SECONDS * 100))
-			{
-				vTaskDelay(10 / portTICK_PERIOD_MS);
-			} 
-
-			// Did fall here because user held a long press or let go for a short press
-			if (ticks >= LONG_PRESS_IN_SECONDS * 100)
-			{
-				ESP_LOGI(TAG, "Long Press");
-                ESP_ERROR_CHECK(esp_event_post(BUTTON_EVENT, BUTTON_EVENT_LONG, NULL, 0, portMAX_DELAY));
-			}
-			else
-			{
-				ESP_LOGI(TAG, "Short Press");
-                ESP_ERROR_CHECK(esp_event_post(BUTTON_EVENT, BUTTON_EVENT_SHORT, NULL, 0, portMAX_DELAY));
-			}
-
-			// Wait here if they are still holding it
-			while(!gpio_get_level(BUTTON_GPIO))
-			{
-				vTaskDelay(100 / portTICK_PERIOD_MS);
-			}
-			
-			ESP_LOGI(TAG, "BTN Released.");
-		}
-	}
-}
 
 /**
  * @brief initalizing SNTP - Simple Network Time Protocol to synchronize ESP32 time with google's.
@@ -199,59 +80,12 @@ static void obtain_time(void)
     struct tm timeinfo = {0};
     while (timeinfo.tm_year < (2022 - 1900))
     {
-        vTaskDelay(2000 / portTICK_PERIOD_MS);  //wait 2 seconds
+        vTaskDelay(2000 / TICK);  //wait 2 seconds
         ESP_LOGI(TAG, "Waiting for system time to be set...");
         time(&now); //get time
         localtime_r(&now, &timeinfo);
     }
     ESP_LOGI(TAG, "Time is set...");
-}
-
-/**
- * @brief blinking status LED 3 times
- * 
- * @param pvParameters void
- */
-void TaskStartupLED(void *arg)
-{
-    for(;;)
-    {
-        status_led *mStatus = (status_led*)arg;
-        //led sequence when provisioning
-        while(*mStatus == STATUS_PROV)
-        {
-            for (size_t i = 0; i < 3; i++)
-                BLINK;
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-        }
-
-        //led sequence when provisioned but wifi disconnected
-        while (*mStatus == STATUS_WIFI)
-            BLINK;
-
-        while (*mStatus == STATUS_OK)
-        {
-            vTaskDelay(10 / portTICK_PERIOD_MS);
-        }
-    }
-}
-
-/**
- * @brief initalizing Status led
- * 
- */
-static void init_status_led()
-{
-    /* Configure output */
-    gpio_config_t io_conf = {
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = 1,
-    };
-    io_conf.pin_bit_mask = ((uint64_t)1 << STATUS_GPIO);
-    /* Configure the GPIO */
-    ESP_ERROR_CHECK(gpio_config(&io_conf));
-    ESP_ERROR_CHECK(gpio_set_level(STATUS_GPIO, false));
-    xTaskCreate(&TaskStartupLED, "startupLED", 512, &status, 1, &HandleTaskStartupLED);
 }
 
 /**
@@ -423,7 +257,7 @@ static void mqtt_task(void *pvParameters)
     iotc_state_t state = generate_jwt(jwt, IOTC_JWT_SIZE, 1);
 
     ESP_LOGI(TAG, "wait 30 sec");
-    vTaskDelay(30000 / portTICK_PERIOD_MS);
+    vTaskDelay(30000 / TICK);
 
     ESP_LOGI(TAG, "jwt =\n%s\n", jwt);
 
@@ -635,13 +469,17 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
     }
     else if (event_base == BUTTON_EVENT && event_id == BUTTON_EVENT_LONG)
     {
-
+        //start provisioning
     }
 }
 
-void app_main() 
+extern "C" void app_main() 
 {
     ESP_LOGI(TAG, "Unimot-esp start");
+    
+    //initalize arduino
+    initArduino();
+
     /* Initialize the default event loop */
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
