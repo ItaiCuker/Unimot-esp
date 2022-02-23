@@ -3,10 +3,6 @@
 
 #include "defines.h"
 
-void TaskStartupLED(void *arg);
-void init_status_led();
-
-
 #define STATUS_GPIO GPIO_NUM_2
 
 /**
@@ -20,9 +16,8 @@ typedef enum
     STATUS_PROV
 }status_led_t;
 
-void TaskStartupLED(void *status);            //task declaration
-static TaskHandle_t HandleTaskStartupLED = NULL;    //handle for task
-static status_led_t status = STATUS_OK;                           //variable for task
+extern status_led_t status;
+
 #define DELAY 150 / TICK  //delay for led blink
 
 //macro for blink
@@ -32,5 +27,8 @@ static status_led_t status = STATUS_OK;                           //variable for
     gpio_set_level(STATUS_GPIO, 0);\
     vTaskDelay(DELAY);\
 }
+
+void TaskStartupLED(void *arg);            //task declaration
+void init_status_led();
 
 #endif

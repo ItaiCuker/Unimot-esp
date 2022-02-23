@@ -21,7 +21,10 @@
         "irremoteesp8266.h": "c",
         "irac.h": "c",
         "random": "cpp",
-        "task.h": "c"
+        "task.h": "c",
+        "btn.h": "c",
+        "protocomm_ble.h": "c",
+        "string": "cpp"
     },
     "C_Cpp.errorSquiggles": "Enabled"
 }

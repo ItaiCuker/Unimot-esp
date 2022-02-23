@@ -3,10 +3,7 @@
 
 #include "defines.h"
 
-void TaskButtonScan(void* arg);
-void init_button();
-
-ESP_EVENT_DEFINE_BASE(BUTTON_EVENT);    //button event base
+ESP_EVENT_DECLARE_BASE(BUTTON_EVENT);
 
 /* button event declarations */
 typedef enum
@@ -16,7 +13,9 @@ typedef enum
 }button_event_t;
 
 #define BUTTON_GPIO GPIO_NUM_12
-static TaskHandle_t HandleTaskButtonScan = NULL;
 #define LONG_PRESS_IN_SECONDS 3
+
+void TaskButtonScan(void* arg);
+void init_button();
 
 #endif

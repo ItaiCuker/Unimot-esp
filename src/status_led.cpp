@@ -1,5 +1,8 @@
 #include "status_led.h"
 
+TaskHandle_t HandleTaskStartupLED = NULL;
+status_led_t status = STATUS_OK;
+
 /**
  * @brief initalizing Status led
  * 
@@ -42,7 +45,7 @@ void TaskStartupLED(void *arg)
 
         while (*mStatus == STATUS_OK)
         {
-            vTaskDelay(10 / TICK);
+            vTaskDelay(1000 / TICK);
         }
     }
 }

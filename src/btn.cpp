@@ -1,5 +1,7 @@
 #include "btn.h"
 
+ESP_EVENT_DEFINE_BASE(BUTTON_EVENT);    //button event base
+TaskHandle_t HandleTaskButtonScan = NULL;
 
 /**
  * @brief task to handle button scanning
