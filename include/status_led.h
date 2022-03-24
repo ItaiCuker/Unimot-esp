@@ -3,8 +3,6 @@
 
 #include "defines.h"
 
-#define STATUS_GPIO GPIO_NUM_2
-
 /**
  * @brief enum for app status
  * 
@@ -22,9 +20,9 @@ extern status_led_t status;
 
 //macro for blink
 #define BLINK {\
-    gpio_set_level(STATUS_GPIO, 1);\
+    gpio_set_level(GPIO_STATUS, 1);\
     vTaskDelay(DELAY);\
-    gpio_set_level(STATUS_GPIO, 0);\
+    gpio_set_level(GPIO_STATUS, 0);\
     vTaskDelay(DELAY);\
 }
 

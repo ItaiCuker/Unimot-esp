@@ -23,6 +23,7 @@
 #include "defines.h"
 #include "btn.h"
 #include "mqtt.h"
+#include "ir.h"
 
 /* Wi-Fi events */
 const int WIFI_CONNECTED_BIT = BIT0;
@@ -102,6 +103,8 @@ void init_nvs()
  */
 void start_prov()
 {
+    ESP_LOGI(TAG, "start_prov()");
+    
     ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(
         WIFI_PROV_SECURITY_1,   //using secured communication
         CONFIG_UNIMOT_POP,                    //proof of possesion so only users of Unimot can provision device.
@@ -238,23 +241,25 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
             }
         }
     }
+
     else if (event_base == BUTTON_EVENT && event_id == BUTTON_EVENT_LONG)
     {
         wifi_prov_mgr_reset_provisioning(); //reseting provisioning
         esp_restart();
+    }
+    
+    else if (event_base == BUTTON_EVENT && event_id == BUTTON_EVENT_SHORT)
+    {
+        sendCode();
     }
 }
 
 extern "C" void app_main() 
 {
     ESP_LOGI(TAG, "Unimot-esp start");
-    
-    //initalize arduino
-    // initArduino();
 
     /* Initialize the default event loop */
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-
     //blinking led until startup is finished (ESP connected to AP)
     init_status_led();      //init status LED
     init_button();      //init button event task
@@ -274,6 +279,7 @@ extern "C" void app_main()
     {
         status = STATUS_PROV;
         start_prov();
+        ESP_LOGI(TAG, "after start_prov()");
     }
 
     //waiting until connected
@@ -287,7 +293,7 @@ extern "C" void app_main()
 
     //stopping startup LED sequence if hasn't already
     status = STATUS_OK;
-    gpio_set_level(STATUS_GPIO, 0);
+    gpio_set_level(GPIO_STATUS, 0);
 
     //logging time since program start
     int64_t time_since_boot = esp_timer_get_time();

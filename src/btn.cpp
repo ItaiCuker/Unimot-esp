@@ -15,7 +15,7 @@ void TaskButtonScan(void* arg)
 	for (;;) 
 	{        
         // Wait here to detect press
-		while( gpio_get_level(BUTTON_GPIO) )
+		while( gpio_get_level(GPIO_BTN) )
 		{
 			vTaskDelay(125 / TICK);
 		}
@@ -24,14 +24,15 @@ void TaskButtonScan(void* arg)
 		vTaskDelay(50 / TICK);
 
 		// Re-Read Button State After Debounce
-		if (!gpio_get_level(BUTTON_GPIO)) 
+		if (!gpio_get_level(GPIO_BTN)) 
 		{
+			gpio_set_level(GPIO_TX, 1);
 			ESP_LOGI(TAG, "BTN Pressed Down.");
 			
 			ticks = 0;
 		
 			// Loop here while pressed until user lets go, or longer that set time
-			while ((!gpio_get_level(BUTTON_GPIO)) && (++ticks < LONG_PRESS_IN_SECONDS * 100))
+			while ((!gpio_get_level(GPIO_BTN)) && (++ticks < LONG_PRESS_IN_SECONDS * 100))
 			{
 				vTaskDelay(10 / TICK);
 			} 
@@ -49,11 +50,11 @@ void TaskButtonScan(void* arg)
 			}
 
 			// Wait here if they are still holding it
-			while(!gpio_get_level(BUTTON_GPIO))
+			while(!gpio_get_level(GPIO_BTN))
 			{
 				vTaskDelay(100 / TICK);
 			}
-			
+			gpio_set_level(GPIO_TX, 0);
 			ESP_LOGI(TAG, "BTN Released.");
 		}
 	}
@@ -62,8 +63,8 @@ void TaskButtonScan(void* arg)
 void init_button()
 {
     /* Configure input and pull up to read button value */
-    gpio_set_direction(BUTTON_GPIO, GPIO_MODE_INPUT);
-    gpio_set_pull_mode(BUTTON_GPIO, GPIO_PULLUP_ONLY);
+    gpio_set_direction(GPIO_BTN, GPIO_MODE_INPUT);
+    gpio_set_pull_mode(GPIO_BTN, GPIO_PULLUP_ONLY);
 
     //register button events to event handler and start task
     ESP_ERROR_CHECK(esp_event_handler_instance_register(BUTTON_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, NULL));

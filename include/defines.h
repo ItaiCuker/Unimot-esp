@@ -27,4 +27,11 @@ extern const uint8_t ec_pv_key_end[] asm("_binary_private_key_pem_end");
 //event handlers declaration
 void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 
+//gpios
+#define GPIO_BTN GPIO_NUM_13
+#define GPIO_STATUS GPIO_NUM_2
+const int GPIO_RX = 101;
+#define GPIO_TX GPIO_NUM_12
+
+
 #endif

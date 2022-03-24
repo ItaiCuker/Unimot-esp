@@ -37,9 +37,9 @@ void iotc_mqttlogic_subscribe_callback(iotc_context_handle_t in_context_handle, 
             sscanf(sub_message, "%d", &value);
             ESP_LOGI(TAG, "value: %d", value);
             if (value == 1) {
-                ESP_ERROR_CHECK(gpio_set_level(STATUS_GPIO, true));
+                ESP_ERROR_CHECK(gpio_set_level(GPIO_STATUS, true));
             } else if (value == 0) {
-                ESP_ERROR_CHECK(gpio_set_level(STATUS_GPIO, false));
+                ESP_ERROR_CHECK(gpio_set_level(GPIO_STATUS, false));
             }
         }
         free(sub_message);
@@ -47,7 +47,7 @@ void iotc_mqttlogic_subscribe_callback(iotc_context_handle_t in_context_handle, 
 }
 
 /**
- * @brief generates a JWT (jason web token) to connect to the cloud
+ * @brief generates a JWT (Jason Web Token)
  * 
  * @param dst_jwt_buf  pointer to destination of JWT
  * @param dst_jwt_buf_len length of destination
@@ -102,12 +102,7 @@ void mqtt_task(void *pvParameters)
     /* Generate the client authentication JWT, which will serve as the MQTT
      * password. */
     char jwt[IOTC_JWT_SIZE] = {0};
-    iotc_state_t state = generate_jwt(jwt, IOTC_JWT_SIZE, 3600);
-
-    ESP_LOGI(TAG, "wait 30 sec");
-    vTaskDelay(30000 / TICK);
-
-    ESP_LOGI(TAG, "jwt =\n%s\n", jwt);
+    iotc_state_t state = generate_jwt(jwt, IOTC_JWT_SIZE, 86400);   //expiration time 24 hours
 
     if (IOTC_STATE_OK != state) {
         ESP_LOGE(TAG, "iotc_create_iotcore_jwt returned with error: %ul", state);
@@ -121,9 +116,9 @@ void mqtt_task(void *pvParameters)
                 NULL, //username, not used
                 jwt, //auth token formated as jwt
                 device_path, //device path in GCP project
-                150, //wait 2.5 minutes to connect
-                600, //every 10 minutes sends packet so won't disconnect
-                &on_connection_state_changed);  //event handle for iotc
+                150, //connection timeout 2.5 minutes
+                600, //keepalive packet every 10 minutes
+                &on_connection_state_changed);  //event handler for iotc
 
     free(device_path);
     /* The iotc Client is designed for single threaded devices, 

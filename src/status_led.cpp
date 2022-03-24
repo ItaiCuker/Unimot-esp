@@ -14,10 +14,10 @@ void init_status_led()
         .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
     };
-    io_conf.pin_bit_mask = ((uint64_t)1 << STATUS_GPIO);
+    io_conf.pin_bit_mask = ((uint64_t)1 << GPIO_STATUS);
     /* Configure the GPIO */
     ESP_ERROR_CHECK(gpio_config(&io_conf));
-    ESP_ERROR_CHECK(gpio_set_level(STATUS_GPIO, false));
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_STATUS, false));
     xTaskCreate(&TaskStartupLED, "startupLED", 512, &status, 1, &HandleTaskStartupLED);
 }
 

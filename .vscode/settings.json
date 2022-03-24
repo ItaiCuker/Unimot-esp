@@ -24,7 +24,8 @@
         "task.h": "c",
         "btn.h": "c",
         "protocomm_ble.h": "c",
-        "string": "cpp"
+        "string": "cpp",
+        "status_led.h": "c"
     },
     "C_Cpp.errorSquiggles": "Enabled"
 }

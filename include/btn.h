@@ -12,7 +12,6 @@ typedef enum
     BUTTON_EVENT_LONG
 }button_event_t;
 
-#define BUTTON_GPIO GPIO_NUM_12
 #define LONG_PRESS_IN_SECONDS 3
 
 void TaskButtonScan(void* arg);
