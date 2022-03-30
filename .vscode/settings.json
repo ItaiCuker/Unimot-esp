@@ -25,7 +25,16 @@
         "btn.h": "c",
         "protocomm_ble.h": "c",
         "string": "cpp",
-        "status_led.h": "c"
+        "status_led.h": "c",
+        "*.ipp": "cpp",
+        "*.tcc": "cpp",
+        "fstream": "cpp",
+        "iosfwd": "cpp",
+        "new": "cpp",
+        "ostream": "cpp",
+        "sstream": "cpp",
+        "streambuf": "cpp",
+        "thread": "cpp"
     },
     "C_Cpp.errorSquiggles": "Enabled"
 }

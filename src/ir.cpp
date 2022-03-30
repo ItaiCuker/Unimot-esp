@@ -1,25 +1,59 @@
 #include "ir.h"
 
-IRsend irsend(GPIO_TX);  // Set the GPIO to be used to sending the message.
+const uint16_t kFrequency = 38000;  // in Hz. e.g. 38kHz.
+const uint16_t kCaptureBufferSize = 1024;
+const uint8_t kTimeout = 15;
+const uint16_t kMinUnknownSize = 12;
+const uint8_t kTolerancePercentage = kTolerance;  // kTolerance is normally 25%
 
-uint16_t rawData[199] = {
-    4424, 4268,  584, 1590,  570, 514,  572, 1574,  584, 1590,  574, 498,  588, 510,
-    572, 1576,  586, 500,  584, 510,  574, 1590,  570, 514,  572, 498,  584, 1588, 572,
-    1588,  572, 510,  574, 1576,  586, 510,  570, 512,  574, 498,  582, 1590,  572,
-    1576,  584, 1590,  572, 1574,  586, 1590,  568, 1590,  570, 1590,  572, 1588,
-    574, 510,  574, 498,  586, 498,  586, 510,  572, 514,  568, 1584,  578, 1588,
-    572, 512,  574, 514,  570, 1582,  576, 498,  584, 514,  572, 502,  584, 512,
-    572, 512,  574, 1574,  584, 1576,  584, 500,  584, 1574,  584, 1576,  584,
-    1574,  592, 5122,  4390, 4284,  572, 1576,  584, 514,  570, 1588,  572, 1588,
-    568, 502,  586, 498,  584, 1590,  572, 500,  582, 500,  586, 1588,  570, 516,
-    568, 514,  574, 1586,  574, 1586,  572, 512,  572, 1590,  570, 512,  572, 500,
-    582, 514,  572, 1576,  584, 1576,  584, 1588,  572, 1576,  584, 1578,  580, 1590,
-    572, 1576,  582, 1590,  574, 512,  568, 514,  572, 498,  582, 502,  586, 500,
-    580, 1594,  570, 1574,  584, 514,  572, 498,  582, 1590,  574, 512, 570, 498,
-    586, 500,  582, 514,  570, 514,  568, 1590,  568, 1592,  568, 502,  582, 1590,
-      568, 1580,  582, 1592,  544};  // COOLIX B21FC8
+decode_results results;  // Somewhere to store the results
 
-void sendCode()
-{
-    irsend.sendPronto(rawData, 199);
+bool isReading = false;
+
+size_t rawDataLen;
+uint16_t *rawData;
+
+TaskHandle_t xHandleReadCode;
+
+IRsend irsend(GPIO_TX, true);  // Set the GPIO to be used to sending the message.
+IRrecv irrecv(GPIO_RX, kCaptureBufferSize, kTimeout, true);
+
+void initSendCode(){
+    irsend.begin();
+}
+
+void sendCode() {
+  if (!isReading)    
+    irsend.sendRaw(rawData, rawDataLen, kFrequency);
+}
+
+void initReadCode() {
+  irrecv.setUnknownThreshold(kMinUnknownSize);
+  irrecv.setTolerance(kTolerancePercentage);  // Override the default tolerance.
+
+}
+
+void readCode(void *pvParameters){
+  while (true){
+    if (irrecv.decode(&results)){
+      // Display the basic output of what we found.
+      ESP_LOGI("ir result", "%s", resultToHumanReadableBasic(&results).c_str());
+      rawData = resultToRawArray(&results);
+      rawDataLen = getCorrectedRawLength(&results);
+    }
+    vPortYield();
+  }
+}
+
+void startRead() {
+    isReading = true;
+    irrecv.enableIRIn();
+    xTaskCreate(&readCode, "readCode", 2048, NULL, 1, &xHandleReadCode);
+}
+
+void stopRead() {
+    isReading = false;
+    irrecv.disableIRIn();
+    if (xHandleReadCode != NULL)
+        vTaskDelete(xHandleReadCode);
 }

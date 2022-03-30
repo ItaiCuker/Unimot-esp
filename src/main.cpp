@@ -244,8 +244,12 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
 
     else if (event_base == BUTTON_EVENT && event_id == BUTTON_EVENT_LONG)
     {
-        wifi_prov_mgr_reset_provisioning(); //reseting provisioning
-        esp_restart();
+        // wifi_prov_mgr_reset_provisioning(); //reseting provisioning
+        // esp_restart();
+        if (isReading)
+            stopRead();
+        else
+            startRead();
     }
     
     else if (event_base == BUTTON_EVENT && event_id == BUTTON_EVENT_SHORT)
@@ -257,52 +261,55 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
 extern "C" void app_main() 
 {
     ESP_LOGI(TAG, "Unimot-esp start");
-
-    /* Initialize the default event loop */
+    
+    // /* Initialize the default event loop */
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    //blinking led until startup is finished (ESP connected to AP)
-    init_status_led();      //init status LED
+    // //blinking led until startup is finished (ESP connected to AP)
+    // init_status_led();      //init status LED
     init_button();      //init button event task
-    init_nvs();         //init storage of program
-    init_wifi();        //init wifi station
-    init_prov;        //init provisioning API
+    pinMode(12, INPUT);
+    initSendCode();
+    initReadCode();
+    // init_nvs();         //init storage of program
+    // init_wifi();        //init wifi station
+    // init_prov;        //init provisioning API
 
-    /*checking if device has been provisioned */
-    ESP_ERROR_CHECK(wifi_prov_mgr_is_provisioned(&isProvisioned));
-    ESP_LOGI(TAG, "provisoned? %s", isProvisioned ? "true" : "false");
-    if (isProvisioned)
-    {   
-        status = STATUS_WIFI;     
-        start_wifi_sta();
-    }    
-    else
-    {
-        status = STATUS_PROV;
-        start_prov();
-        ESP_LOGI(TAG, "after start_prov()");
-    }
+    // /*checking if device has been provisioned */
+    // ESP_ERROR_CHECK(wifi_prov_mgr_is_provisioned(&isProvisioned));
+    // ESP_LOGI(TAG, "provisoned? %s", isProvisioned ? "true" : "false");
+    // if (isProvisioned)
+    // {   
+    //     status = STATUS_WIFI;     
+    //     start_wifi_sta();
+    // }    
+    // else
+    // {
+    //     status = STATUS_PROV;
+    //     start_prov();
+    //     ESP_LOGI(TAG, "after start_prov()");
+    // }
 
-    //waiting until connected
-    xEventGroupWaitBits(wifi_event_group,
-            WIFI_CONNECTED_BIT,
-            pdFALSE,
-            pdFALSE,
-            portMAX_DELAY);
+    // //waiting until connected
+    // xEventGroupWaitBits(wifi_event_group,
+    //         WIFI_CONNECTED_BIT,
+    //         pdFALSE,
+    //         pdFALSE,
+    //         portMAX_DELAY);
 
-    isProvisioned = true;   //we are connected to WiFi now
+    // isProvisioned = true;   //we are connected to WiFi now
 
-    //stopping startup LED sequence if hasn't already
-    status = STATUS_OK;
-    gpio_set_level(GPIO_STATUS, 0);
+    // //stopping startup LED sequence if hasn't already
+    // status = STATUS_OK;
+    // gpio_set_level(GPIO_STATUS, 0);
 
-    //logging time since program start
-    int64_t time_since_boot = esp_timer_get_time();
-    ESP_LOGI(TAG, "connected to Wifi in: %lld microseconds", time_since_boot);
+    // //logging time since program start
+    // int64_t time_since_boot = esp_timer_get_time();
+    // ESP_LOGI(TAG, "connected to Wifi in: %lld microseconds", time_since_boot);
     
-    ESP_LOGI(TAG, "starting connection to cloud");
+    // ESP_LOGI(TAG, "starting connection to cloud");
     
-    obtain_time();  //waiting to get accurate time
+    // obtain_time();  //waiting to get accurate time
 
-    //creating mqtt task that runs indefinetly
-    xTaskCreate(&mqtt_task, "mqtt_task", 8192, NULL, 1, NULL);
+    // //creating mqtt task that runs indefinetly
+    // xTaskCreate(&mqtt_task, "mqtt_task", 8192, NULL, 1, NULL);
 }

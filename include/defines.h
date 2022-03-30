@@ -30,8 +30,8 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
 //gpios
 #define GPIO_BTN GPIO_NUM_13
 #define GPIO_STATUS GPIO_NUM_2
-const int GPIO_RX = 101;
-#define GPIO_TX GPIO_NUM_12
+#define GPIO_RX GPIO_NUM_12
+#define GPIO_TX GPIO_NUM_14
 
 
 #endif

@@ -1382,9 +1382,9 @@ CONFIG_WPA_MBEDTLS_CRYPTO=y
 #
 # Google IoT Core Configuration
 #
-CONFIG_GIOT_PROJECT_ID="esp32-firebase-blink"
+CONFIG_GIOT_PROJECT_ID="unimot-app"
 CONFIG_GIOT_LOCATION="europe-west1"
-CONFIG_GIOT_REGISTRY_ID="Remotes"
+CONFIG_GIOT_REGISTRY_ID="remotes"
 CONFIG_GIOT_DEVICE_ID="UNIMOT-62101C"
 # CONFIG_GIOT_DEBUG_OUTPUT is not set
 # end of Google IoT Core Configuration

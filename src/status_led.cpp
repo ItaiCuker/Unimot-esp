@@ -47,5 +47,6 @@ void TaskStartupLED(void *arg)
         {
             vTaskDelay(1000 / TICK);
         }
+        vPortYield();
     }
 }

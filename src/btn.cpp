@@ -1,7 +1,6 @@
 #include "btn.h"
 
 ESP_EVENT_DEFINE_BASE(BUTTON_EVENT);    //button event base
-TaskHandle_t HandleTaskButtonScan = NULL;
 
 /**
  * @brief task to handle button scanning
@@ -13,7 +12,7 @@ void TaskButtonScan(void* arg)
 	ESP_LOGI(TAG, "Waiting For Press.");
 	
 	for (;;) 
-	{        
+	{
         // Wait here to detect press
 		while( gpio_get_level(GPIO_BTN) )
 		{
@@ -57,6 +56,7 @@ void TaskButtonScan(void* arg)
 			gpio_set_level(GPIO_TX, 0);
 			ESP_LOGI(TAG, "BTN Released.");
 		}
+		vPortYield();
 	}
 }
 
@@ -68,6 +68,5 @@ void init_button()
 
     //register button events to event handler and start task
     ESP_ERROR_CHECK(esp_event_handler_instance_register(BUTTON_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, NULL));
-    if (HandleTaskButtonScan == NULL)
-        xTaskCreate(&TaskButtonScan, "button scan", 2048, NULL, 1, &HandleTaskButtonScan);
+    xTaskCreate(&TaskButtonScan, "button scan", 2048, NULL, 1, NULL);
 }
