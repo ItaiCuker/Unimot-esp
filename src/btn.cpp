@@ -8,9 +8,8 @@ ESP_EVENT_DEFINE_BASE(BUTTON_EVENT);    //button event base
 void TaskButtonScan(void* arg)
 {
 	uint16_t ticks = 0;
-
-	ESP_LOGI(TAG, "Waiting For Press.");
 	
+	ESP_LOGI(TAG, "Waiting For Press.");
 	for (;;) 
 	{
         // Wait here to detect press
@@ -25,7 +24,6 @@ void TaskButtonScan(void* arg)
 		// Re-Read Button State After Debounce
 		if (!gpio_get_level(GPIO_BTN)) 
 		{
-			gpio_set_level(GPIO_TX, 1);
 			ESP_LOGI(TAG, "BTN Pressed Down.");
 			
 			ticks = 0;
@@ -53,10 +51,8 @@ void TaskButtonScan(void* arg)
 			{
 				vTaskDelay(100 / TICK);
 			}
-			gpio_set_level(GPIO_TX, 0);
 			ESP_LOGI(TAG, "BTN Released.");
 		}
-		vPortYield();
 	}
 }
 

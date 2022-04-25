@@ -3,6 +3,8 @@
 
 #include "defines.h"
 
+#include "esp_task_wdt.h"
+
 #include "IRrecv.h"
 #include "IRsend.h"
 #include "IRutils.h"
