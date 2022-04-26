@@ -33,5 +33,4 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
 #define GPIO_RX GPIO_NUM_12
 #define GPIO_TX GPIO_NUM_14
 
-
 #endif

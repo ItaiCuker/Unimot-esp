@@ -12,9 +12,15 @@
 #include "mqtt.h"
 
 //strings for subscription paths
-char *subscribe_topic_command, *subscribe_topic_config;
+char *subscribe_topic_command, *publish_topic;
 
 iotc_context_handle_t iotc_context = IOTC_INVALID_CONTEXT_HANDLE;
+
+void publish_data()
+{
+    iotc_state_t state = iotc_publish(iotc_context, publish_topic, "hello world!", IOTC_MQTT_QOS_AT_LEAST_ONCE, NULL, NULL);
+    ESP_LOGI(TAG, "publish state =%d, topic =%s", state, publish_topic);
+}
 
 void iotc_mqttlogic_subscribe_callback(iotc_context_handle_t in_context_handle, iotc_sub_call_type_t call_type,const iotc_sub_call_params_t *const params, iotc_state_t state,void *user_data)
 {
@@ -32,15 +38,8 @@ void iotc_mqttlogic_subscribe_callback(iotc_context_handle_t in_context_handle, 
         memcpy(sub_message, params->message.temporary_payload_data, params->message.temporary_payload_data_length);
         sub_message[params->message.temporary_payload_data_length] = '\0';
         ESP_LOGI(TAG, "Message Payload: %s\n %s == %s", sub_message, subscribe_topic_command, params->message.topic);
-        if (strcmp("/devices/test_device/commands/", params->message.topic)) {
-            int value;
-            sscanf(sub_message, "%d", &value);
-            ESP_LOGI(TAG, "value: %d", value);
-            if (value == 1) {
-                ESP_ERROR_CHECK(gpio_set_level(GPIO_STATUS, true));
-            } else if (value == 0) {
-                ESP_ERROR_CHECK(gpio_set_level(GPIO_STATUS, false));
-            }
+        if (strcmp(subscribe_topic_command, params->message.topic)) {  //if command came from the command topic of this device
+            //TODO get 
         }
         free(sub_message);
     }
@@ -147,11 +146,13 @@ void on_connection_state_changed(iotc_context_handle_t in_context_handle, void *
     case IOTC_CONNECTION_STATE_OPENED:
         ESP_LOGI(TAG, "connected to cloud!");
 
+
         /* Publish immediately upon connect. 'publish_function' is defined
            in this example file and invokes the IoTC API to publish a
            message. */
 
         asprintf(&subscribe_topic_command, SUBSCRIBE_TOPIC_COMMAND, CONFIG_GIOT_DEVICE_ID);
+        asprintf(&publish_topic, PUBLISH_TOPIC, CONFIG_GIOT_DEVICE_ID);
         ESP_LOGI(TAG, "subscribing to topic: \"%s\"", subscribe_topic_command);
         iotc_subscribe(in_context_handle, subscribe_topic_command, IOTC_MQTT_QOS_AT_LEAST_ONCE,
                        &iotc_mqttlogic_subscribe_callback, /*user_data=*/NULL);
@@ -167,7 +168,6 @@ void on_connection_state_changed(iotc_context_handle_t in_context_handle, void *
        message. */
     case IOTC_CONNECTION_STATE_OPEN_FAILED:
         ESP_LOGI(TAG, "ERROR! Connection has failed reason %d", state);
-
         /* exit it out of the application by stopping the event loop. */
         iotc_events_stop();
         break;
@@ -180,8 +180,9 @@ void on_connection_state_changed(iotc_context_handle_t in_context_handle, void *
        requested a disconnection via 'iotc_shutdown_connection'. If the state !=
        IOTC_STATE_OK then the connection has been closed from one side. */
     case IOTC_CONNECTION_STATE_CLOSED:
+
         free(subscribe_topic_command);
-        free(subscribe_topic_config);
+        free(publish_topic);
         /* When the connection is closed it's better to cancel some of previously
            registered activities. Using cancel function on handler will remove the
            handler from the timed queue which prevents the registered handle to be
