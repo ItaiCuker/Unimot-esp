@@ -18,8 +18,11 @@ iotc_context_handle_t iotc_context = IOTC_INVALID_CONTEXT_HANDLE;
 
 void publish_data()
 {
+<<<<<<< HEAD
     iotc_state_t state = iotc_publish(iotc_context, publish_topic, "hello world!", IOTC_MQTT_QOS_AT_LEAST_ONCE, NULL, NULL);
     ESP_LOGI(TAG, "publish state =%d, topic =%s", state, publish_topic);
+=======
+>>>>>>> 61711105e01f6de10091205c582c84cee0e800db
 }
 
 void iotc_mqttlogic_subscribe_callback(iotc_context_handle_t in_context_handle, iotc_sub_call_type_t call_type,const iotc_sub_call_params_t *const params, iotc_state_t state,void *user_data)
