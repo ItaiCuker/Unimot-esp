@@ -2,6 +2,7 @@
 #define MQTT_H
 
 #include "defines.h"
+#include "main.h"
 
 #include <iotc.h>
 #include <iotc_jwt.h>
@@ -17,7 +18,9 @@
 //publish path
 #define PUBLISH_TOPIC "/devices/%s/events"
 
-extern void publish_data();
+void publish_json(DynamicJsonDocument doc);
+void publish_string(char *data);
+void reconnect_mqtt(void *pvParameters);
 void on_connection_state_changed(iotc_context_handle_t in_context_handle, void *data, iotc_state_t state);
 void mqtt_task(void *pvParameters);
 #endif

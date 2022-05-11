@@ -12,6 +12,8 @@
 #include "esp_log.h"
 #include "driver/gpio.h"
 
+#include "ArduinoJson.h"
+
 #include "status_led.h"
 
 //private key location in program

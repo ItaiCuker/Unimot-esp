@@ -7,7 +7,7 @@ const uint8_t kTimeout = 15;
 decode_results results;  // Somewhere to store the results
 
 bool isReading = false;
-bool gotCode = false;
+bool hasCode = false;
 
 size_t rawDataLen;
 uint16_t *rawData;
@@ -21,8 +21,30 @@ void initSendCode(){
     irsend.begin();
 }
 
-void sendCode() {
-  if (!isReading && gotCode)
+/**
+ * @brief send command
+ * 
+ * @param command command to send
+ * @param commandLen command length
+ */
+void sendCommand(uint16_t *command, size_t commandLen) {
+  if (!isReading)
+  {
+    irsend.sendRaw(command, commandLen, kFrequency);
+  }
+}
+
+void initReadCode() {
+  pinMode(12, INPUT);
+}
+
+/**
+ * @brief test code in results struct
+ * 
+ */
+void testCode() {
+  stopRead();
+  if (!isReading && hasCode)
   {
     // Convert the results into an array suitable for sendRaw().
     // resultToRawArray() allocates the memory we need for the array.
@@ -36,14 +58,16 @@ void sendCode() {
   }
 }
 
-void initReadCode() {
-  pinMode(12, INPUT);
-}
-
+/**
+ * @brief task to read code
+ * 
+ * @param pvParameters unused
+ */
 void readCode(void *pvParameters){
   while (true){
     if (irrecv.decode(&results)){
-      gotCode = true;
+      hasCode = true;
+      gotCode();
       // Display the basic output of what we found.
       ESP_LOGI("ir result", "%s\n%s", resultToHumanReadableBasic(&results).c_str(), resultToSourceCode(&results).c_str());
     }
@@ -52,15 +76,19 @@ void readCode(void *pvParameters){
 }
 
 void startRead() {
-    isReading = true;
-    gotCode = false; //reseting state so I won't use previous saved code.
-    irrecv.enableIRIn();
-    xTaskCreate(&readCode, "readCode", 2048, NULL, 2, &xHandleReadCode);
+    if (!isReading) {
+      isReading = true;
+      hasCode = false;
+      irrecv.enableIRIn();
+      xTaskCreate(&readCode, "readCode", 4046, NULL, 2, &xHandleReadCode);
+    }
 }
 
 void stopRead() {
-    isReading = false;
+  if (isReading) {
     irrecv.disableIRIn();
-    if (xHandleReadCode)
-        vTaskDelete(xHandleReadCode);
+    isReading = false;
+    if (xHandleReadCode != NULL)
+      vTaskDelete(xHandleReadCode);
+  }
 }

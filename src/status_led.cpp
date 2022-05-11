@@ -5,7 +5,6 @@ status_led_t status = STATUS_OK;
 
 /**
  * @brief initalizing Status led
- * 
  */
 void init_status_led()
 {
@@ -40,8 +39,13 @@ void TaskStartupLED(void *arg)
         }
 
         //led sequence when provisioned but wifi disconnected
-        while (*mStatus == STATUS_WIFI)
+        while (*mStatus == STATUS_CONNECTING)
             BLINK;
+
+        while (*mStatus == STATUS_LEARNING) {
+            vTaskDelay(1000/TICK);
+            BLINK;
+        }
 
         while (*mStatus == STATUS_OK)
         {

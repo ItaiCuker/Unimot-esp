@@ -10,8 +10,9 @@
 typedef enum
 {
     STATUS_OK,
-    STATUS_WIFI,
-    STATUS_PROV
+    STATUS_CONNECTING,
+    STATUS_PROV,
+    STATUS_LEARNING
 }status_led_t;
 
 extern status_led_t status;
