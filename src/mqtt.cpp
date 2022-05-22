@@ -166,7 +166,6 @@ void on_connection_state_changed(iotc_context_handle_t in_context_handle, void *
         //publish upon connect
         status = STATUS_OK;
         doc.clear();
-        doc["isOnline"] = true;
         doc["state"] = "";
         publish_json(doc);
 

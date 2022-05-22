@@ -21,7 +21,6 @@
 extern bool wasConnected;
 extern DynamicJsonDocument doc;
 
-void stopLearn();
 void gotCode();
 void digestCommand(char *sub_message);
 

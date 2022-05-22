@@ -31,6 +31,7 @@ void sendCommand(uint16_t *command, size_t commandLen) {
   if (!isReading)
   {
     irsend.sendRaw(command, commandLen, kFrequency);
+    ESP_LOGI(TAG, "Sent code.");
   }
 }
 
@@ -43,7 +44,6 @@ void initReadCode() {
  * 
  */
 void testCode() {
-  stopRead();
   if (!isReading && hasCode)
   {
     // Convert the results into an array suitable for sendRaw().
@@ -54,7 +54,7 @@ void testCode() {
     irsend.sendRaw(rawData, rawDataLen, kFrequency);
     // Deallocate the memory allocated by resultToRawArray().
     // delete [] raw_array;
-    ESP_LOGI(TAG, "Sent code %s", resultToHumanReadableBasic(&results).c_str());
+    ESP_LOGI(TAG, "tested code %s", resultToHumanReadableBasic(&results).c_str());
   }
 }
 

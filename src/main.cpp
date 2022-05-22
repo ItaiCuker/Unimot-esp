@@ -111,11 +111,17 @@ void digestCommand(char *data)
     }
 
     if (message.equals("stop")) {
-        stopLearn();
+        ESP_LOGI(TAG, "learn stop");
+        stopRead();
+        doc.clear();
+        doc["state"] = "";
+        status = STATUS_OK;
+        publish_json(doc);
     }
 
     if (message.equals("test")) {
         ESP_LOGI(TAG, "learn test");
+        stopRead();
         testCode();
         doc.clear();
         doc["state"] = "tested";
@@ -146,19 +152,7 @@ void digestCommand(char *data)
     }
 }
 
-/**
- * @brief stopping learn
- */
-void stopLearn() {
-    ESP_LOGI(TAG, "learn stop");
-    stopRead();
-    doc.clear();
-    doc["state"] = "";
-    status = STATUS_OK;
-    publish_json(doc);
-}
-
-/**
+/** 
  * @brief remote got code
  */
 void gotCode() {
@@ -319,8 +313,6 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
     
     else if (event_base == BUTTON_EVENT && event_id == BUTTON_EVENT_SHORT)
     {
-        if (status == STATUS_LEARNING)
-            stopLearn();
     }
 }
 
